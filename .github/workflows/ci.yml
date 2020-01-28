@@ -1,0 +1,43 @@
+name: Build And Test
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Build & Test
+    strategy:
+      matrix:
+        os: ["ubuntu-latest", "macos-latest"]
+        release_type: ["debug", "release"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check Out Sources
+        uses: actions/checkout@v1
+      - name: Create CMake Build Tree
+        shell: bash
+        run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.release_type }} -DCMAKE_INSTALL_PREFIX=$(pwd)/output ..
+      - name: Build
+        shell: bash
+        run: cd build && make
+      - name: Test
+        shell: bash
+        run: cd build && make test ARGS="-V"
+      - name: Install
+        shell: bash
+        run: cd build && make install
+      - name: Determine Artifact Name
+        id: name_artifact
+        shell: bash
+        run: |
+          release_type=$(echo "${{ matrix.release_type }}" | tr '[:upper:]' '[:lower:]')
+          os_name=$(uname | tr '[:upper:]' '[:lower:]')
+          short_sha=$(git rev-parse --short HEAD)
+          echo ::set-output name=artifact_name::libhoststat-${release_type}-${os_name}-${short_sha}
+      - name: Upload
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ steps.name_artifact.outputs.artifact_name }}
+          path: build/output/

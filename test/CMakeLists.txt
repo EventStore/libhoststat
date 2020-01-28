@@ -1,0 +1,6 @@
+add_executable(hoststat_test hoststat_test.c)
+target_link_libraries(hoststat_test hoststat)
+
+add_test(NAME test_get_host_total_memory COMMAND hoststat_test test_get_host_total_memory)
+add_test(NAME test_get_host_free_memory COMMAND hoststat_test test_get_host_free_memory)
+add_test(NAME test_get_host_load_averages COMMAND hoststat_test test_get_host_load_averages)

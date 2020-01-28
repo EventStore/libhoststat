@@ -1,0 +1,93 @@
+name: Make Release
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Out Sources
+        uses: actions/checkout@v1
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+      - name: Write Release URL File
+        run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
+      - name: Upload Release URL File
+        uses: actions/upload-artifact@v1
+        with:
+          name: release_url
+          path: release_url.txt
+
+  release:
+    name: Release Library
+    needs: ["create-release"]
+    strategy:
+      matrix:
+        os: ["ubuntu-latest", "macos-latest"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check Out Sources
+        uses: actions/checkout@v1
+      - name: Create CMake Build Tree
+        shell: bash
+        run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(pwd)/output ..
+      - name: Build
+        shell: bash
+        run: cd build && make
+      - name: Test
+        shell: bash
+        run: cd build && make test ARGS="-V"
+      - name: Install
+        shell: bash
+        run: cd build && make install
+      - name: Create Tarball
+        shell: bash
+        run: cd build/output && tar -czvf libhoststat.tar.gz *
+      - name: Download Release URL File
+        uses: actions/download-artifact@v1
+        with:
+          name: release_url
+      - name: Get Artifact Upload URL
+        id: get_release_info
+        shell: bash
+        run: echo ::set-output name=upload_url::$(cat release_url/release_url.txt)
+      - name: Determine Artifact Name Suffix
+        id: name_artifact
+        shell: bash
+        run: |
+          echo ::set-output name=artifact_suffix::$(uname | tr '[:upper:]' '[:lower:]')
+
+          if [ $(uname) = 'Darwin' ] ; then
+            echo ::set-output name=library_suffix::.dylib
+          else
+            echo ::set-output name=library_suffix::.so
+          fi
+      - name: Upload Release Tarball
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release_info.outputs.upload_url }}
+          asset_path: build/output/libhoststat.tar.gz
+          asset_name: libhoststat-${{ steps.name_artifact.outputs.artifact_suffix }}.tar.gz
+          asset_content_type: application/gzip
+      - name: Upload Release Library
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release_info.outputs.upload_url }}
+          asset_path: build/output/lib/libhoststat${{ steps.name_artifact.outputs.library_suffix }}
+          asset_name: libhoststat-${{ steps.name_artifact.outputs.artifact_suffix }}${{ steps.name_artifact.outputs.library_suffix }}
+          asset_content_type: application/octet-stream
