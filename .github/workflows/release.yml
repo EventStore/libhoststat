@@ -102,10 +102,22 @@ jobs:
         uses: docker/setup-qemu-action@v1.2.0
         with:
           platforms: arm64
-      - name: Build & Test on Ubuntu Arm64v8 Docker Image
-        id: build_arm
+      - name: Start Build Container
         run: |
-          docker run --rm --volume $(pwd):/libhoststat -e DEBIAN_FRONTEND=noninteractive -t arm64v8/ubuntu bash -c " echo 'Setting up environment...'; apt-get update > /dev/null; apt-get install -y build-essential cmake > dev/null; echo 'Done'; cd /libhoststat; mkdir build; cd build; cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=./output .. ; make && make test ARGS='-V' ; make install;"
+          docker run -td --rm \
+          --volume $(pwd):/libhoststat \
+          -e DEBIAN_FRONTEND=noninteractive \
+          -w /libhoststat \
+          --name ubuntu_arm \
+          arm64v8/ubuntu 
+      - name: Setup Build Environment
+        run : docker exec ubuntu_arm bash -c "apt-get update; apt-get install -y build-essential cmake "
+      - name: Create CMake Build Tree
+        run : docker exec ubuntu_arm bash -c "mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=./output .. "
+      - name: Test
+        run : docker exec ubuntu_arm bash -c "cd build && make && make test ARGS='-V' "
+      - name: Install
+        run : docker exec ubuntu_arm bash -c "cd build && make install"
       - name: Create Tarball
         shell: bash
         run: cd build/output && tar -czvf libhoststat.tar.gz *
@@ -135,4 +147,3 @@ jobs:
           asset_path: build/output/lib/libhoststat.so
           asset_name: libhoststat-linux-arm64.so
           asset_content_type: application/octet-stream
-
