@@ -41,3 +41,33 @@ jobs:
         with:
           name: ${{ steps.name_artifact.outputs.artifact_name }}
           path: build/output/
+          
+  build-arm64:
+    name: Build & Test (linux-arm64)
+    strategy:
+      matrix:
+        release_type: ['debug', 'release']
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Docker Setup QEMU
+        uses: docker/setup-qemu-action@v1.2.0
+        with:
+          platforms: arm64
+      - name: Build & Test on Ubuntu Arm64v8 Docker Image
+        id: build_arm
+        run: |
+          docker run --rm --volume $(pwd):/libhoststat -e DEBIAN_FRONTEND=noninteractive -t arm64v8/ubuntu bash -c " echo 'Setting up environment...'; apt-get update > /dev/null; apt-get install -y build-essential cmake > dev/null; echo 'Done'; cd /libhoststat; mkdir build; cd build; cmake -DCMAKE_BUILD_TYPE=${{ matrix.release_type }} -DCMAKE_INSTALL_PREFIX=./output .. ; make && make test ARGS='-V' ; make install;"
+      - name: Determine Artifact Name
+        id: name_artifact
+        shell: bash
+        run: |
+          release_type=$(echo "${{ matrix.release_type }}" | tr '[:upper:]' '[:lower:]')
+          short_sha=$(git rev-parse --short HEAD)
+          echo ::set-output name=artifact_name::libhoststat-${release_type}-linux-arm64-${short_sha}
+      - name: Upload
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ steps.name_artifact.outputs.artifact_name }}
+          path: build/output/
